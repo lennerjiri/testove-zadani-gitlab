@@ -15,10 +15,15 @@ import { library } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 
 /* import specific icons */
-import { faList, faArrowsRotate } from "@fortawesome/pro-regular-svg-icons";
+import {
+  faList,
+  faArrowsRotate,
+  faUserGroup,
+  faLayerGroup,
+} from "@fortawesome/pro-regular-svg-icons";
 
 /* add icons to the library */
-library.add(faList, faArrowsRotate);
+library.add(faList, faArrowsRotate, faUserGroup, faLayerGroup);
 
 const app = createApp(App).component("font-awesome-icon", FontAwesomeIcon);
 
