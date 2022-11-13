@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, ref } from "vue";
+import { ref } from "vue";
 
 // Input
 const groupId = ref("");
@@ -16,7 +16,7 @@ const allGroups = ref([]);
 const allMembers = ref([]);
 const allProjects = ref([]);
 
-// Check Input
+// Retrieve data using credentials from the input
 const submit = async () => {
   // Clear data
   error.value = false;
@@ -36,7 +36,7 @@ const submit = async () => {
     return;
   }
 
-  // Get correct access level
+  // Get correct access level function -> used later on to get text message for number
   const access_level = (access_level) => {
     switch (access_level) {
       case 10:
@@ -54,7 +54,7 @@ const submit = async () => {
     }
   };
 
-  // Get all groups
+  // Data retrieving
   try {
     // Get top level group
     const topLevelGroupRes = await await fetch(
@@ -98,7 +98,7 @@ const submit = async () => {
     }
 
     // Create members
-    /// Top Level - Members
+    /// Get top level members and add them to the array
     const topLevelMembersRes = await fetch(
       `https://gitlab.com/api/v4/groups/${groupId.value}/members/`,
       {
@@ -125,7 +125,7 @@ const submit = async () => {
       });
     }
 
-    /// Sub Groups - Members
+    /// Get subgroup members and add them to the array + check for duplicates or add new members to the array
     allGroups.value.forEach(async (group) => {
       const response = await fetch(
         `https://gitlab.com/api/v4/groups/${group.id}/members/`,
@@ -177,7 +177,8 @@ const submit = async () => {
       }
     });
 
-    /// Top Level - Projects
+    // Add Projects
+    // Get top level projects + add them to the array
     const topLevelProjectsRes = await fetch(
       `https://gitlab.com/api/v4/groups/${groupId.value}/projects/`,
       {
@@ -190,7 +191,7 @@ const submit = async () => {
     const topLevelProjectsData = await topLevelProjectsRes.json();
     allProjects.value.push(...topLevelProjectsData);
 
-    // Subgroup projects
+    // Get subgroups projects + add them to the array
     for (const group of allGroups.value) {
       const response = await fetch(
         `https://gitlab.com/api/v4/groups/${group.id}/projects/`,
@@ -204,7 +205,7 @@ const submit = async () => {
       allProjects.value.push(...projectData);
     }
 
-    // Add projects to members
+    // Add projects to members or create new members
     for (const project of allProjects.value) {
       const response = await fetch(
         `https://gitlab.com/api/v4/projects/${project.id}/members/`,
@@ -219,7 +220,7 @@ const submit = async () => {
 
       for (const projectMember of projectMembers) {
         let flag = false;
-        // If member exists in allMembers
+        // If member exists in allMembers append values
         for (const member of allMembers.value) {
           if (member.id === projectMember.id) {
             flag = true;
@@ -230,7 +231,7 @@ const submit = async () => {
             });
           }
         }
-        // If member does not exist in allMembers
+        // If member does not exist in allMembers create new member
         if (!flag) {
           allMembers.value.push({
             id: projectMember.id,
@@ -248,10 +249,11 @@ const submit = async () => {
       }
     }
 
+    // Reveal the table
     loading.value = false;
     loaded.value = true;
-    console.log("allMembers", allMembers.value);
   } catch (err) {
+    // If error occurs reveal error message
     error.value = true;
     loading.value = false;
   }
