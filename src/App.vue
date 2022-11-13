@@ -1,16 +1,197 @@
-<script setup></script>
+<script setup>
+import { nextTick, ref } from "vue";
+
+// Input
+const groupId = ref("");
+const userToken = ref("");
+
+// Flags
+const error = ref(false);
+const loading = ref(false);
+const loaded = ref(false);
+
+// Output Data
+const allGroups = ref([]);
+const allMembers = ref([]);
+
+// Check Input
+const submit = async () => {
+  // Clear data
+  error.value = false;
+  loaded.value = false;
+  loading.value = true;
+
+  // Group data
+  allGroups.value = [];
+
+  // Check Input
+  if (groupId.value === "" || userToken.value === "") {
+    error.value = true;
+    loading.value = false;
+    return;
+  }
+
+  // Get all groups
+  try {
+    // Get top level group
+    const topLevelGroupRes = await await fetch(
+      `https://gitlab.com/api/v4/groups/${groupId.value}/`,
+      {
+        headers: {
+          "PRIVATE-TOKEN": userToken.value,
+        },
+      }
+    );
+    const topLevelGroup = await topLevelGroupRes.json();
+
+    // get all groups
+    let page = 1;
+    while (true) {
+      const response = await await fetch(
+        `https://gitlab.com/api/v4/groups/${groupId.value}/descendant_groups?per_page=100&page=${page}`,
+        {
+          headers: {
+            "PRIVATE-TOKEN": userToken.value,
+          },
+        }
+      );
+
+      if (response.status !== 200) {
+        error.value = true;
+        loading.value = false;
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.length === 0) {
+        loading.value = false;
+        loaded.value = true;
+        break;
+      } else {
+        allGroups.value.push(...data);
+
+        page++;
+      }
+    }
+
+    // Create members
+
+    /// Top Level - Members
+    const topLevel = await fetch(
+      `https://gitlab.com/api/v4/groups/${groupId.value}/members/`,
+      {
+        headers: {
+          "PRIVATE-TOKEN": userToken.value,
+        },
+      }
+    );
+
+    const topLevelMembers = await topLevel.json();
+
+    for (const member of topLevelMembers) {
+      allMembers.value.push({
+        id: member.id,
+        name: member.name,
+        username: member.username,
+        groups: [
+          {
+            path: topLevelGroup.full_path,
+            access_level: member.access_level,
+          },
+        ],
+        projects: [],
+      });
+    }
+
+    /// Sub Groups - Members
+    allGroups.value.forEach(async (group) => {
+      const response = await fetch(
+        `https://gitlab.com/api/v4/groups/${group.id}/members/`,
+        {
+          method: "GET",
+          headers: {
+            "PRIVATE-TOKEN": userToken.value,
+          },
+        }
+      );
+
+      if (response.status !== 200) {
+        error.value = true;
+        loading.value = false;
+        return;
+      } else {
+        const subGroupMembers = await response.json();
+
+        for (let i = 0; i < subGroupMembers.length; i++) {
+          let foundFlag = false;
+
+          // If already listed
+          for (let j = 0; j < allMembers.value.length; j++) {
+            if (subGroupMembers[i].id === allMembers.value[j].id) {
+              allMembers.value[j].groups.push({
+                path: group.full_path,
+                access_level: subGroupMembers[i].access_level,
+              });
+              foundFlag = true;
+            }
+          }
+
+          // If not yet listed
+          if (!foundFlag) {
+            allMembers.value.push({
+              id: subGroupMembers[i].id,
+              name: subGroupMembers[i].name,
+              username: subGroupMembers[i].username,
+              groups: [
+                {
+                  path: group.full_path,
+                  access_level: subGroupMembers[i].access_level,
+                },
+              ],
+              projects: [],
+            });
+          }
+        }
+      }
+    });
+
+    console.log(allMembers.value);
+
+    // Get top level group members
+
+    // Get all sub group members
+
+    // Set data
+  } catch (err) {
+    error.value = true;
+    loading.value = false;
+  }
+};
+
+// Restart
+const restart = () => {
+  error.value = false;
+  loading.value = false;
+  loaded.value = false;
+  allGroups.value = [];
+
+  groupId.value = "";
+  userToken.value = "";
+};
+</script>
 
 <template>
   <header>
     <h1>Gitlab User-Lister</h1>
     <nav>
-      <input type="text" placeholder="Group Id" />
-      <input type="text" placeholder="User Token" />
-      <button>
+      <input type="text" v-model="groupId" placeholder="Group Id" />
+      <input type="text" v-model="userToken" placeholder="User Token" />
+      <button @click="submit">
         <p>List Groups</p>
         <font-awesome-icon icon="fa-regular fa-list" />
       </button>
-      <button>
+      <button @click="restart">
         <p>Restart</p>
         <font-awesome-icon icon="fa-regular fa-arrows-rotate" />
       </button>
@@ -18,18 +199,23 @@
   </header>
   <main>
     <!-- Err -->
-    <section class="main__err" v-if="false">
-      <p>Incorect group Id</p>
+    <section class="main__err" v-if="error">
+      <p>Incorrect input!</p>
+    </section>
+    <!-- Err -->
+    <section class="main__loading" v-if="loading">
+      <p>Loading</p>
     </section>
     <!-- Overview -->
-    <section class="main__group-info">
+    <section class="main__group-info" v-if="loaded">
       <p>Group Name: {{}}</p>
       <p>Total Users: {{}}</p>
     </section>
     <!-- Main -->
-    <section class="main__users-info">
+    <section class="main__users-info" v-if="false">
       <div class="users-info__user-data">
         <h2 class="user-data__name">Name: {{}}</h2>
+        <div class="user-data__divider"></div>
         <p class="user-data__username">Username: {{}}</p>
         <div class="user-data__user-groups-container">
           <h3>Groups:</h3>
@@ -138,6 +324,11 @@ main {
     color: rgb(210, 0, 0);
     box-shadow: $box-shadow;
   }
+  .main__loading {
+    @extend .main__err;
+    background-color: #aedcf0;
+    color: rgb(45, 114, 203);
+  }
 
   .main__group-info {
     padding: 1.5rem;
@@ -176,6 +367,12 @@ main {
 
       .user-data__name {
         font-size: 1.5rem;
+      }
+
+      .user-data__divider {
+        width: 100%;
+        height: 0.05rem;
+        background-color: #ccc;
       }
 
       .user-data__username {
