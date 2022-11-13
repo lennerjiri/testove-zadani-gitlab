@@ -13,6 +13,7 @@ const loaded = ref(false);
 // Output Data
 const allGroups = ref([]);
 const allMembers = ref([]);
+const allProjects = ref([]);
 
 // Check Input
 const submit = async () => {
@@ -23,6 +24,8 @@ const submit = async () => {
 
   // Group data
   allGroups.value = [];
+  allMembers.value = [];
+  allProjects.value = [];
 
   // Check Input
   if (groupId.value === "" || userToken.value === "") {
@@ -78,7 +81,7 @@ const submit = async () => {
     // Create members
 
     /// Top Level - Members
-    const topLevel = await fetch(
+    const topLevelMembersRes = await fetch(
       `https://gitlab.com/api/v4/groups/${groupId.value}/members/`,
       {
         headers: {
@@ -87,7 +90,7 @@ const submit = async () => {
       }
     );
 
-    const topLevelMembers = await topLevel.json();
+    const topLevelMembers = await topLevelMembersRes.json();
 
     for (const member of topLevelMembers) {
       allMembers.value.push({
@@ -129,11 +132,11 @@ const submit = async () => {
           // If already listed
           for (let j = 0; j < allMembers.value.length; j++) {
             if (subGroupMembers[i].id === allMembers.value[j].id) {
+              foundFlag = true;
               allMembers.value[j].groups.push({
                 path: group.full_path,
                 access_level: subGroupMembers[i].access_level,
               });
-              foundFlag = true;
             }
           }
 
@@ -156,17 +159,85 @@ const submit = async () => {
       }
     });
 
-    console.log(allMembers.value);
+    /// Top Level - Projects
+    const topLevelProjectsRes = await fetch(
+      `https://gitlab.com/api/v4/groups/${groupId.value}/projects/`,
+      {
+        headers: {
+          "PRIVATE-TOKEN": userToken.value,
+        },
+      }
+    );
 
-    // Get top level group members
+    const topLevelProjectsData = await topLevelProjectsRes.json();
+    allProjects.value.push(...topLevelProjectsData);
 
-    // Get all sub group members
+    // Subgroup projects
+    for (const group of allGroups.value) {
+      const response = await fetch(
+        `https://gitlab.com/api/v4/groups/${group.id}/projects/`,
+        {
+          headers: {
+            "PRIVATE-TOKEN": userToken.value,
+          },
+        }
+      );
+      const projectData = await response.json();
+      allProjects.value.push(...projectData);
+    }
+
+    // Add projects to members
+    for (const project of allProjects.value) {
+      const response = await fetch(
+        `https://gitlab.com/api/v4/projects/${project.id}/members/`,
+        {
+          headers: {
+            "PRIVATE-TOKEN": userToken.value,
+          },
+        }
+      );
+
+      const projectMembers = await response.json();
+
+      console.log("projectMembers", projectMembers);
+
+      for (const projectMember of projectMembers) {
+        let flag = false;
+        // If member exists in allMembers
+        for (const member of allMembers.value) {
+          if (member.id === projectMember.id) {
+            flag = true;
+
+            allMembers.value[allMembers.value.indexOf(member)].projects.push({
+              path: project.path_with_namespace,
+              access_level: projectMember.access_level,
+            });
+          }
+        }
+        // If member does not exist in allMembers
+        if (!flag) {
+          allMembers.value.push({
+            id: projectMember.id,
+            name: projectMember.name,
+            username: projectMember.username,
+            groups: [],
+            projects: [
+              {
+                path: project.path_with_namespace,
+                access_level: projectMember.access_level,
+              },
+            ],
+          });
+        }
+      }
+    }
 
     // Set data
   } catch (err) {
     error.value = true;
     loading.value = false;
   }
+  console.log(allMembers.value);
 };
 
 // Restart
