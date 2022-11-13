@@ -12,7 +12,7 @@ See [Vite Configuration Reference](https://vitejs.dev/config/).
 
 ## Project Setup
 
-### Create `.npmrc` in root folder and include the following content with `TOKEN` replaced with fontawesome pro token from the email
+### Create `.npmrc` in root folder and include the following content with `TOKEN` replaced with fontawesome pro token
 
 ```
 @fortawesome:registry=https://npm.fontawesome.com/
